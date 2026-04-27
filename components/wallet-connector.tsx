@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  connect,
   disconnect,
   getPublicKey,
   signMessage,
@@ -10,12 +9,14 @@ import { useEffect, useState } from "react";
 import { toast } from "react-hot-toast";
 import { createClient } from "@/lib/supabase/client";
 import { WalletAddress } from "@/components/wallet-address";
+import { WalletSelectionModal } from "@/components/wallet-selection-modal";
 import { handleAppError } from "@/lib/error-handler";
 
 export default function ConnectWallet() {
   const [publicKey, setPublicKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [authenticating, setAuthenticating] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const supabase = createClient();
 
   // ── Wallet signature login flow ───────────────────────────────────────────
@@ -87,23 +88,25 @@ export default function ConnectWallet() {
       handleAppError(new Error("offline"), "NETWORK");
       return;
     }
+    setIsModalOpen(true);
+  }
 
-    await connect(async () => {
-      try {
-        const key = await getPublicKey();
-        if (key) {
-          await authenticateWithWallet(key);
-        } else {
-          // Triggered if the wallet kit returns without a key
-          handleAppError(new Error("No public key found"), "WALLET_CONNECT");
-          setLoading(false);
-        }
-      } catch (error) {
-        handleAppError(error, "WALLET_CONNECT");
+  async function handleConnectSuccess() {
+    try {
+      const key = await getPublicKey();
+      if (key) {
+        await authenticateWithWallet(key);
+      } else {
+        // Triggered if the wallet kit returns without a key
+        handleAppError(new Error("No public key found"), "WALLET_CONNECT");
         setLoading(false);
       }
-    });
+    } catch (error) {
+      handleAppError(error, "WALLET_CONNECT");
+      setLoading(false);
+    }
   }
+
 
   async function handleDisconnect() {
     setLoading(true);
@@ -168,6 +171,13 @@ export default function ConnectWallet() {
       )}
 
       {loading && <div className="p-2 text-sm opacity-60">Loading…</div>}
+
+      <WalletSelectionModal
+        isOpen={isModalOpen}
+        onOpenChange={setIsModalOpen}
+        onConnectSuccess={handleConnectSuccess}
+      />
     </div>
+
   );
 }
