@@ -16,6 +16,7 @@ import {
 } from "@/components/presence-indicator";
 import { RoomMembersDialog } from "@/components/room-members-dialog";
 import ConnectWallet from "@/components/wallet-connector";
+import { RoomActivityPanel } from "@/components/room-activity-panel";
 import { cn } from "@/lib/utils";
 import { handleAppError } from "@/lib/error-handler"; // Integrated Error Handler
 import {
@@ -595,6 +596,10 @@ export default function ChatPage() {
                       </button>
                     </div>
                   </header>
+
+                  <div className="px-4 sm:px-5 pt-3">
+                    <RoomActivityPanel roomId={selectedChatId} />
+                  </div>
 
                    <div
                      ref={scrollContainerRef}

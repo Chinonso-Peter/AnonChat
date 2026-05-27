@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { type NextRequest, NextResponse } from "next/server"
+import { insertRoomActivity } from "@/lib/activity/room-activity"
+import type { SupabaseClient } from "@supabase/supabase-js"
 
 export async function POST(
   request: NextRequest,
@@ -93,6 +95,21 @@ export async function POST(
         { vote_recorded: true, removed: false, error: "Vote recorded but threshold check failed" },
         { status: 201 }
       )
+    }
+
+    if (removed) {
+      // Best-effort: log that the target user left (was removed)
+      try {
+        await insertRoomActivity(supabase as unknown as SupabaseClient, {
+          room_id: roomId,
+          event_type: "user_left",
+          actor_user_id: user.id,
+          target_user_id,
+          metadata: { reason: "removed_by_vote" },
+        })
+      } catch (e) {
+        console.warn("[activity] failed to insert user_left log", e)
+      }
     }
 
     return NextResponse.json({
