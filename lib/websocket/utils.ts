@@ -73,6 +73,19 @@ export function sendWebSocketMessage(roomId: string, content: string) {
 }
 
 /**
+ * Marks a message as delivered via WebSocket
+ */
+export function markWebSocketMessageDelivered(messageId: string, roomId: string) {
+  const client = getWebSocketClient()
+
+  if (!client.isConnected()) {
+    return
+  }
+
+  client.markAsDelivered(messageId, roomId)
+}
+
+/**
  * Notifies that the user is typing
  */
 export function notifyWebSocketTyping(roomId: string) {
@@ -116,7 +129,7 @@ export function notifyWebSocketWalletEvent(action: "connect" | "disconnect", wal
  */
 export function getWebSocketStatus() {
   const client = getWebSocketClient()
-  return client.getConnectionState()
+  return client.isConnected()
 }
 
 /**
