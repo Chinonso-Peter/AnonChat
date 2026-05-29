@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server"
 import { type NextRequest, NextResponse } from "next/server"
 import { validateInviteCode, incrementInviteUseCount } from "@/lib/groups/invite"
+import { insertRoomActivity } from "@/lib/activity/room-activity"
+import type { SupabaseClient } from "@supabase/supabase-js"
 
 export async function POST(request: NextRequest) {
   try {
@@ -65,6 +67,18 @@ export async function POST(request: NextRequest) {
     console.info(
       `[groups/join] User ${user.id} joined group ${roomId} via invite code ${inviteCode}`
     )
+
+    // Best-effort: log the join event (separate from chat messages)
+    try {
+      await insertRoomActivity(supabase as unknown as SupabaseClient, {
+        room_id: roomId,
+        event_type: "user_joined",
+        actor_user_id: user.id,
+        metadata: { via: "invite", inviteCode },
+      })
+    } catch (e) {
+      console.warn("[activity] failed to insert user_joined log", e)
+    }
 
     return NextResponse.json({
       success: true,
