@@ -11,11 +11,14 @@ import {
   generateCorrelationId,
 } from "@/lib/blockchain/logger";
 import { recordGroupAuditEvent } from "@/lib/blockchain/audit";
+import { insertRoomActivity } from "@/lib/activity/room-activity";
+import { type SupabaseClient } from "@supabase/supabase-js";
 
 export async function GET(request: NextRequest) {
   try {
     // Check if Supabase is configured (not dummy)
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://dummy.supabase.co";
+    const supabaseUrl =
+      process.env.NEXT_PUBLIC_SUPABASE_URL || "https://dummy.supabase.co";
     if (supabaseUrl.includes("dummy")) {
       // Return empty rooms for demo mode without Supabase
       return NextResponse.json({ rooms: [] });
@@ -69,11 +72,15 @@ export async function POST(request: NextRequest) {
 
   try {
     // Check if Supabase is configured (not dummy)
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://dummy.supabase.co";
+    const supabaseUrl =
+      process.env.NEXT_PUBLIC_SUPABASE_URL || "https://dummy.supabase.co";
     if (supabaseUrl.includes("dummy")) {
       // Return error in demo mode without Supabase
       return NextResponse.json(
-        { error: "Room creation not available in demo mode. Please configure Supabase." },
+        {
+          error:
+            "Room creation not available in demo mode. Please configure Supabase.",
+        },
         { status: 503 },
       );
     }
@@ -94,7 +101,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "name is required" }, { status: 400 });
     }
 
-    const roomId = `room_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const roomId = `room_${Date.now()}_${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
     const createdAt = new Date().toISOString();
 
     // Insert group into database first

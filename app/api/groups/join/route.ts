@@ -1,47 +1,58 @@
-import { createClient } from "@/lib/supabase/server"
-import { type NextRequest, NextResponse } from "next/server"
-import { validateInviteCode, incrementInviteUseCount } from "@/lib/groups/invite"
-import { recordGroupAuditEvent } from "@/lib/blockchain/audit"
+import { createClient } from "@/lib/supabase/server";
+import { type NextRequest, NextResponse } from "next/server";
+import {
+  validateInviteCode,
+  incrementInviteUseCount,
+} from "@/lib/groups/invite";
+import { recordGroupAuditEvent } from "@/lib/blockchain/audit";
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient()
+    const supabase = await createClient();
 
     const {
       data: { user },
-    } = await supabase.auth.getUser()
+    } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json().catch(() => null)
+    const body = await request.json().catch(() => null);
     if (!body) {
-      return NextResponse.json({ error: "Request body is required" }, { status: 400 })
+      return NextResponse.json(
+        { error: "Request body is required" },
+        { status: 400 },
+      );
     }
 
-    const { code } = body as { code?: string }
+    const { code } = body as { code?: string };
 
-    const validation = await validateInviteCode(supabase, code ?? "")
+    const validation = await validateInviteCode(supabase, code ?? "");
 
     if (!validation.valid) {
       console.warn(
-        `[groups/join] Invalid invite attempt — user: ${user.id}, code: ${code ?? "(none)"}, reason: ${validation.error}`
-      )
-      return NextResponse.json({ error: validation.error }, { status: validation.status })
+        `[groups/join] Invalid invite attempt — user: ${user.id}, code: ${
+          code ?? "(none)"
+        }, reason: ${validation.error}`,
+      );
+      return NextResponse.json(
+        { error: validation.error },
+        { status: validation.status },
+      );
     }
 
-    const { roomId, inviteCode } = validation
+    const { roomId, inviteCode } = validation;
 
     // Verify the group still exists
     const { data: group } = await supabase
       .from("rooms")
       .select("id, name")
       .eq("id", roomId)
-      .maybeSingle()
+      .maybeSingle();
 
     if (!group) {
-      return NextResponse.json({ error: "Group not found" }, { status: 404 })
+      return NextResponse.json({ error: "Group not found" }, { status: 404 });
     }
 
     // Insert membership record
@@ -49,23 +60,28 @@ export async function POST(request: NextRequest) {
       .from("room_members")
       .insert({ user_id: user.id, room_id: roomId })
       .select("user_id, room_id, joined_at")
-      .single()
+      .single();
 
     if (membershipError) {
       // Unique constraint violation — user is already a member
       if (membershipError.code === "23505") {
-        console.info(`[groups/join] User ${user.id} is already a member of group ${roomId}`)
-        return NextResponse.json({ success: true, message: "Already a member" })
+        console.info(
+          `[groups/join] User ${user.id} is already a member of group ${roomId}`,
+        );
+        return NextResponse.json({
+          success: true,
+          message: "Already a member",
+        });
       }
-      throw membershipError
+      throw membershipError;
     }
 
     // Atomically increment invite usage count (non-blocking on failure)
-    await incrementInviteUseCount(supabase, inviteCode)
+    await incrementInviteUseCount(supabase, inviteCode);
 
     console.info(
-      `[groups/join] User ${user.id} joined group ${roomId} via invite code ${inviteCode}`
-    )
+      `[groups/join] User ${user.id} joined group ${roomId} via invite code ${inviteCode}`,
+    );
 
     const auditEvent = await recordGroupAuditEvent({
       supabase,
@@ -75,9 +91,10 @@ export async function POST(request: NextRequest) {
       targetUserId: user.id,
       metadata: {
         invite_code_used: inviteCode,
-        membership_id: membership.id,
+        membership_user_id: membership.user_id,
+        membership_room_id: membership.room_id,
       },
-    })
+    });
 
     return NextResponse.json({
       success: true,
@@ -88,9 +105,12 @@ export async function POST(request: NextRequest) {
         joined_at: membership.joined_at,
       },
       audit: auditEvent ?? undefined,
-    })
+    });
   } catch (error) {
-    console.error("[groups/join] POST /api/groups/join error:", error)
-    return NextResponse.json({ error: "Failed to join group" }, { status: 500 })
+    console.error("[groups/join] POST /api/groups/join error:", error);
+    return NextResponse.json(
+      { error: "Failed to join group" },
+      { status: 500 },
+    );
   }
 }
