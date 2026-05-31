@@ -10,13 +10,15 @@ import {
   logBlockchainOperation,
   generateCorrelationId,
 } from "@/lib/blockchain/logger";
+import { recordGroupAuditEvent } from "@/lib/blockchain/audit";
 import { insertRoomActivity } from "@/lib/activity/room-activity";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { type SupabaseClient } from "@supabase/supabase-js";
 
 export async function GET(request: NextRequest) {
   try {
     // Check if Supabase is configured (not dummy)
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://dummy.supabase.co";
+    const supabaseUrl =
+      process.env.NEXT_PUBLIC_SUPABASE_URL || "https://dummy.supabase.co";
     if (supabaseUrl.includes("dummy")) {
       // Return empty rooms for demo mode without Supabase
       return NextResponse.json({ rooms: [] });
@@ -70,11 +72,15 @@ export async function POST(request: NextRequest) {
 
   try {
     // Check if Supabase is configured (not dummy)
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://dummy.supabase.co";
+    const supabaseUrl =
+      process.env.NEXT_PUBLIC_SUPABASE_URL || "https://dummy.supabase.co";
     if (supabaseUrl.includes("dummy")) {
       // Return error in demo mode without Supabase
       return NextResponse.json(
-        { error: "Room creation not available in demo mode. Please configure Supabase." },
+        {
+          error:
+            "Room creation not available in demo mode. Please configure Supabase.",
+        },
         { status: 503 },
       );
     }
@@ -95,7 +101,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "name is required" }, { status: 400 });
     }
 
-    const roomId = `room_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const roomId = `room_${Date.now()}_${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
     const createdAt = new Date().toISOString();
 
     // Insert group into database first
@@ -166,6 +174,7 @@ export async function POST(request: NextRequest) {
     let explorerUrl: string | null = null;
     let actualFeeCharged: string | null = null;
     let memoGroupId: string | null = null;
+    let auditEvent = null;
 
     try {
       const result = await submitMetadataHash(room.id, metadataHash, max_fee);
@@ -256,6 +265,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    auditEvent = await recordGroupAuditEvent({
+      supabase,
+      groupId: room.id,
+      eventType: "group_created",
+      actorUserId: user.id,
+      targetUserId: user.id,
+      maxFee: max_fee,
+      metadata: {
+        room_name: room.name,
+        is_private: room.is_private,
+        metadata_hash: metadataHash,
+        group_creation_transaction_hash: stellarTxHash,
+      },
+    });
+
     // Return success response with blockchain info
     return NextResponse.json(
       {
@@ -274,6 +298,7 @@ export async function POST(request: NextRequest) {
           explorerUrl: explorerUrl || undefined,
           memoGroupId: memoGroupId || undefined,
         },
+        audit: auditEvent || undefined,
       },
       { status: 201 },
     );
