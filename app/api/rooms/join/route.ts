@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server"
 import { type NextRequest, NextResponse } from "next/server"
 import { validateInviteCode, incrementInviteUseCount } from "@/lib/groups/invite"
+import { insertRoomActivity } from "@/lib/activity/room-activity"
+import type { SupabaseClient } from "@supabase/supabase-js"
 
 export async function POST(request: NextRequest) {
   try {
@@ -35,6 +37,10 @@ export async function POST(request: NextRequest) {
       validatedCode = validation.inviteCode
     }
 
+    if (!roomId) {
+      return NextResponse.json({ error: "Room not found" }, { status: 404 })
+    }
+
     // verify room exists
     const { data: room } = await supabase.from("rooms").select("id").eq("id", roomId).maybeSingle()
     if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 })
@@ -51,6 +57,18 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ message: "Already a member", success: true })
       }
       throw membershipError
+    }
+
+    // Best-effort: log the join event (separate from chat messages)
+    try {
+      await insertRoomActivity(supabase as unknown as SupabaseClient, {
+        room_id: roomId,
+        event_type: "user_joined",
+        actor_user_id: user.id,
+        metadata: { via: validatedCode ? "invite" : "direct" },
+      })
+    } catch (e) {
+      console.warn("[activity] failed to insert user_joined log", e)
     }
 
     if (validatedCode) {
